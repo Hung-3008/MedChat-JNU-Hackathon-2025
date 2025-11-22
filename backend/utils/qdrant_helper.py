@@ -8,15 +8,27 @@ logger = logging.getLogger("qdrant_helper")
 
 class QdrantHelper:
     def __init__(self):
+        # Try to connect to network server first, fall back to local storage
         url = os.getenv("QDRANT_URL", "http://localhost:6333")
         api_key = os.getenv("QDRANT_API_KEY", None)
+        storage_path = os.getenv("QDRANT_STORAGE_PATH", "./.qdrant_storage")
         
         try:
-            self.client = QdrantClient(url=url, api_key=api_key)
-            logger.info("Connected to Qdrant")
+            # Try network connection first
+            self.client = QdrantClient(url=url, api_key=api_key, timeout=5)
+            logger.info(f"Connected to Qdrant server at {url}")
         except Exception as e:
-            logger.error(f"Failed to connect to Qdrant: {e}")
-            raise
+            logger.warning(f"Failed to connect to Qdrant server at {url}: {e}")
+            logger.info(f"Falling back to persistent storage at {storage_path}")
+            
+            try:
+                # Fall back to local persistent storage
+                os.makedirs(storage_path, exist_ok=True)
+                self.client = QdrantClient(path=storage_path)
+                logger.info(f"Connected to Qdrant with persistent storage at {storage_path}")
+            except Exception as e2:
+                logger.error(f"Failed to connect to Qdrant: {e2}")
+                raise
 
     def create_collection(self, collection_name: str, vector_size: int = 768):
         """Creates collection if it doesn't exist."""
